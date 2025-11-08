@@ -1,0 +1,37 @@
+name: Deploy to AWS EC2 (Linux)
+
+on:
+  workflow_run:
+    workflows: ["CD Pipeline - Build & Push Docker Image"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: SSH into EC2 and deploy latest container
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            echo "Logging into EC2 server..."
+            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            echo "Pulling latest image..."
+            docker pull akashdocker134/todo-fastapi:latest
+
+            echo "Stopping and removing old container (if exists)..."
+            docker stop todo-fastapi || true
+            docker rm todo-fastapi || true
+
+            echo "Running new container..."
+            docker run -d \
+              --name todo-fastapi \
+              -p 8000:8000 \
+              akashdocker134/todo-fastapi:latest
+
+            echo "Deployment complete ✅"
