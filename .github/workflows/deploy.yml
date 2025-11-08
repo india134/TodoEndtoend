@@ -1,37 +1,41 @@
-name: Deploy to AWS EC2 (Linux)
+name: CD Pipeline - Build & Deploy FastAPI Todo App
 
 on:
-  workflow_run:
-    workflows: ["CD Pipeline - Build & Push Docker Image"]
-    types:
-      - completed
+  push:
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: SSH into EC2 and deploy latest container
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Logging into EC2 server..."
-            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-            echo "Pulling latest image..."
-            docker pull akashdocker134/todo-fastapi:latest
+            echo "🧹 Cleaning old containers..."
+            CONTAINER_ID=$(sudo docker ps -q --filter "publish=8000")
+            if [ -n "$CONTAINER_ID" ]; then
+              echo "Stopping old container on port 8000..."
+              sudo docker stop $CONTAINER_ID || true
+              sudo docker rm $CONTAINER_ID || true
+            fi
 
-            echo "Stopping and removing old container (if exists)..."
-            docker stop todo-fastapi || true
-            docker rm todo-fastapi || true
+            echo "📦 Pulling latest image..."
+            sudo docker pull akashdocker134/todo-fastapi:latest
 
-            echo "Running new container..."
-            docker run -d \
-              --name todo-fastapi \
-              -p 8000:8000 \
-              akashdocker134/todo-fastapi:latest
+            echo "🚀 Starting new container..."
+            sudo docker run -d -p 8000:8000 --name todo-fastapi akashdocker134/todo-fastapi:latest
 
-            echo "Deployment complete ✅"
+            echo "🔍 Verifying container is running..."
+            sleep 5
+            if sudo docker ps | grep -q "todo-fastapi"; then
+              echo "✅ Deployment verified successfully!"
+            else
+              echo "❌ Deployment failed — container not running!"
+              exit 1
+            fi
+
