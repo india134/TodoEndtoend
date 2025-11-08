@@ -1,8 +1,11 @@
-name: CD Pipeline - Build & Deploy FastAPI Todo App
+name: CD Pipeline - Deploy FastAPI Todo App
 
 on:
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["CI Pipeline - Build & Push Docker Image"]
+    types:
+      - completed
+
 
 jobs:
   deploy:
