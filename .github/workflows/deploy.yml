@@ -2,10 +2,9 @@ name: CD Pipeline - Deploy FastAPI Todo App
 
 on:
   workflow_run:
-    workflows: ["CD Pipeline - Build & Push Docker Image"]
+    workflows: ["CD Pipeline - Build & Push Docker Image"]  # Must match the exact workflow name
     types:
       - completed
-
 
 jobs:
   deploy:
@@ -19,26 +18,34 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🧹 Cleaning old containers..."
-            CONTAINER_ID=$(sudo docker ps -q --filter "publish=8000")
+            echo "🧹 Cleaning up any existing containers..."
+            CONTAINER_ID=$(sudo docker ps -aq --filter "name=todo-fastapi")
             if [ -n "$CONTAINER_ID" ]; then
-              echo "Stopping old container on port 8000..."
+              echo "Stopping and removing existing 'todo-fastapi' container..."
               sudo docker stop $CONTAINER_ID || true
               sudo docker rm $CONTAINER_ID || true
+            else
+              echo "No old container found. Proceeding..."
             fi
 
-            echo "📦 Pulling latest image..."
+            echo "🧼 Removing dangling images to free space..."
+            sudo docker image prune -f || true
+
+            echo "📦 Pulling the latest Docker image..."
             sudo docker pull akashdocker134/todo-fastapi:latest
 
             echo "🚀 Starting new container..."
             sudo docker run -d -p 8000:8000 --name todo-fastapi akashdocker134/todo-fastapi:latest
 
-            echo "🔍 Verifying container is running..."
+            echo "🔍 Verifying container status..."
             sleep 5
             if sudo docker ps | grep -q "todo-fastapi"; then
-              echo "✅ Deployment verified successfully!"
+              echo "✅ Deployment successful! Container is running."
+              sudo docker ps
             else
               echo "❌ Deployment failed — container not running!"
+              echo "Showing recent logs for debugging:"
+              sudo docker logs todo-fastapi || true
               exit 1
             fi
 
